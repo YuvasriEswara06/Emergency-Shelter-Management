@@ -4,11 +4,13 @@ import com.example.demo.entity.Items;
 import com.example.demo.service.ItemService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+@PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
 @RestController
 @RequestMapping("/api/items")
 public class ItemController {
@@ -29,6 +31,7 @@ public class ItemController {
         return itemService.getItemById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<?> createItem(@RequestBody Items item) {
         try {

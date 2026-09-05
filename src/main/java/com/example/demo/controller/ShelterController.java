@@ -1,22 +1,29 @@
 package com.example.demo.controller;
 
 import com.example.demo.entity.Shelter;
+import com.example.demo.security.SecurityAuthorizationService;
 import com.example.demo.service.ShelterService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+@PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
 @RestController
 @RequestMapping("/api/shelters")
 public class ShelterController {
 
     private final ShelterService shelterService;
+    private final SecurityAuthorizationService securityAuthorizationService;
 
-    public ShelterController(ShelterService shelterService) {
+    public ShelterController(ShelterService shelterService, SecurityAuthorizationService securityAuthorizationService) {
         this.shelterService = shelterService;
+        this.securityAuthorizationService = securityAuthorizationService;
     }
 
     // GET /api/shelters              -> all shelters
@@ -24,21 +31,35 @@ public class ShelterController {
     // GET /api/shelters?search=Adyar  -> search by name
     @GetMapping
     public ResponseEntity<List<Shelter>> getShelters(
+            Authentication authentication,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search) {
 
-        if (search != null && !search.isBlank()) {
-            return ResponseEntity.ok(shelterService.searchSheltersByName(search));
+        if (securityAuthorizationService.isAdmin(authentication)) {
+            if (search != null && !search.isBlank()) {
+                return ResponseEntity.ok(shelterService.searchSheltersByName(search));
+            }
+            if (status != null && !status.isBlank()) {
+                return ResponseEntity.ok(shelterService.getSheltersByStatus(status));
+            }
+            return ResponseEntity.ok(shelterService.getAllShelters());
         }
-        if (status != null && !status.isBlank()) {
-            return ResponseEntity.ok(shelterService.getSheltersByStatus(status));
+
+        Integer assignedShelterId = securityAuthorizationService.getCurrentUserShelterId(authentication);
+        if (assignedShelterId == null) {
+            throw new AccessDeniedException("Staff user is not assigned to a shelter");
         }
-        return ResponseEntity.ok(shelterService.getAllShelters());
+        return shelterService.getShelterById(assignedShelterId)
+                .map(s -> ResponseEntity.ok(List.of(s)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // GET /api/shelters/3
     @GetMapping("/{id}")
-    public ResponseEntity<Shelter> getShelterById(@PathVariable Integer id) {
+    public ResponseEntity<Shelter> getShelterById(Authentication authentication, @PathVariable Integer id) {
+        if (!securityAuthorizationService.isAdmin(authentication)) {
+            securityAuthorizationService.assertShelterAccess(authentication, id);
+        }
         return shelterService.getShelterById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -46,6 +67,7 @@ public class ShelterController {
 
     // POST /api/shelters
     // body: { "name": "...", "location": "...", "capacity": 10 }
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<?> createShelter(@RequestBody Shelter shelter) {
         try {
@@ -58,6 +80,7 @@ public class ShelterController {
 
     // PATCH /api/shelters/3/status
     // body: { "status": "Inactive" }
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateShelterStatus(@PathVariable Integer id, @RequestBody Map<String, String> body) {
         try {
