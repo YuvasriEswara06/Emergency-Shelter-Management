@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -22,14 +23,14 @@ public class UserController {
         this.userService = userService;
     }
 
-    // Helper to sanitize User by excluding passwordHash
+    // Helper to sanitize User by excluding passwordHash while allowing null shelter values
     private Map<String, Object> sanitize(Users u) {
-        return Map.of(
-                "userId", u.getUserId(),
-                "username", u.getUsername(),
-                "role", u.getRole(),
-                "shelterId", u.getShelter() == null ? null : u.getShelter().getShelterId()
-        );
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", u.getUserId());
+        map.put("username", u.getUsername());
+        map.put("role", u.getRole());
+        map.put("shelterId", u.getShelter() == null ? null : u.getShelter().getShelterId());
+        return map;
     }
 
     @GetMapping

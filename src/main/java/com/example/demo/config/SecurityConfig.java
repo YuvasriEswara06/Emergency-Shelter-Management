@@ -24,12 +24,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    // API security chain: handles only /api/**, stateless, JWT-based
     @Bean
-    public SecurityFilterChain securityFilterChain(
+    public SecurityFilterChain apiSecurityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
 
         http
+                .securityMatcher("/api/**")
+
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .sessionManagement(session ->
@@ -57,6 +60,44 @@ public class SecurityConfig {
                                 )
                         )
 
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                response.sendError(
+                                        HttpServletResponse.SC_FORBIDDEN,
+                                        "Forbidden"
+                                )
+                        )
+                );
+
+        return http.build();
+    }
+
+    // UI security chain: handles non-/api requests, session-based with form login and CSRF enabled
+    @Bean
+    public SecurityFilterChain uiSecurityFilterChain(HttpSecurity http) throws Exception {
+
+        http
+                // do not match /api/** here — apiSecurityFilterChain covers those
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.IF_REQUIRED
+                        )
+                )
+
+                .authorizeHttpRequests(auth -> auth
+                        // allow static resources and login page
+                        .requestMatchers("/login", "/css/**", "/js/**", "/images/**", "/webjars/**", "/error").permitAll()
+                        .anyRequest().authenticated()
+                )
+
+                .formLogin(form -> form.permitAll())
+
+                .logout(logout -> logout.permitAll())
+
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendRedirect("/login")
+                        )
                         .accessDeniedHandler((request, response, accessDeniedException) ->
                                 response.sendError(
                                         HttpServletResponse.SC_FORBIDDEN,
